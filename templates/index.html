@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>猜詩句遊戲</title>
+    <style>
+        @font-face {
+            font-family: 'NotoSansTC';
+            src: url('NotoSansTC-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body { font-family: 'NotoSansTC', sans-serif; line-height: 1.6; background-color: #f4f4f4; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #0056b3; }
+        p { text-align: center; }
+        form { display: flex; flex-direction: column; gap: 15px; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 5px; color: #555; }
+        input[type="text"], input[type="number"], select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; transition: background-color 0.3s ease; }
+        button:hover:not(:disabled) { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .message-area { margin-top: 15px; padding: 10px; border-radius: 4px; }
+        .message { margin-bottom: 5px; padding: 8px; border-radius: 4px;}
+        .message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .message.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.info { background-color: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; font-size: 0.9em;}
+
+
+        .thresholds-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        .thresholds-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 10px; }
+        .thresholds-group .form-group { margin-bottom: 0; }
+        .result-area { margin-top: 20px; text-align: center; }
+        .result-images { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
+        .result-images img { width: 18%; height: auto; border: 1px solid #ddd; background-color: white;}
+        .result-images .image-placeholder {
+            width: 18%;
+            height: auto;
+            min-height: 100px;
+            border: 1px solid #ddd;
+            background-color: #eee;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8em;
+            color: #777;
+            padding: 5px;
+            box-sizing: border-box;
+            text-align: center;
+            word-break: break-word;
+        }
+
+
+        .color-key { display: flex; justify-content: center; margin-top: 15px; gap: 20px; font-size: 0.9em; flex-wrap: wrap;}
+        .color-key-item { display: flex; align-items: center; gap: 5px; }
+        .color-sample { width: 20px; height: 20px; border: 1px solid #000; flex-shrink: 0; }
+        .color-sample.black { background-color: #000; }
+        .color-sample.gray10 { background-color: #e5e5e5; } /* Adjusted to match 10% gray */
+        .color-sample.gray30 { background-color: #b3b3b3; } /* Adjusted to match 30% gray */
+        .color-sample.hidden { background-color: #fff; border: 1px dashed #ccc; }
+
+
+        .game-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px;}
+        .game-buttons form { flex-direction: row; margin: 0; gap: 15px; }
+
+        .full-poem-display { margin-top: 30px; padding: 15px; background-color: #e9ecef; border-left: 5px solid #007bff; }
+        .full-poem-display h3 { margin-top: 0; color: #0056b3; text-align: left; }
+        .full-poem-display p { margin: 5px 0; text-align: left; }
+
+        #loading-indicator { display: none; text-align: center; margin-top: 10px; font-weight: bold; color: #007bff; }
+
+        .colored-guess-line {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 1.8em;
+            font-weight: bold;
+            min-height: 1.8em;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+             font-family: 'NotoSansTC-Regular', sans-serif; /* Apply Noto Sans TC here explicitly for the guess line */
+        }
+        .colored-guess-line span {
+            display: inline-block;
+            width: 1em;
+            text-align: center;
+        }
+        .colored-guess-line .guess-char-correct { color: green; }
+        .colored-guess-line .guess-char-wrong-pos { color: orange; }
+        .colored-guess-line .guess-char-not-in-word { color: #333; }
+
+        #guess-count {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1em;
+            color: #555;
+        }
+
+        #poem-source-selection {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #poem-source-selection label {
+            margin-right: 10px;
+        }
+        .full-poem-display .target-line {
+            font-weight: bold;
+            color: #000;
+        }
+
+        .stats-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+        .stats-section h2 {
+            margin-bottom: 15px;
+        }
+        .stats-plot {
+             max-width: 100%;
+             height: auto;
+             border: 1px solid #ddd;
+             background-color: white;
+             margin: 0 auto;
+             display: block;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>猜詩句遊戲</h1>
+
+        {% if game_error %}
+            <p class="message error">{{ game_error }}</p>
+             <script>
+                 document.addEventListener('DOMContentLoaded', function() {
+                     const guessInput = document.getElementById('guess_line');
+                     const compareButton = document.getElementById('compare_button');
+                     const giveUpForm = document.getElementById('give-up-form');
+                     const playAgainForm = document.getElementById('play-again-form');
+                     const thresholdsSection = document.querySelector('.thresholds-section');
+                     const poemSourceSection = document.getElementById('poem-source-selection');
+                     const statsSection = document.querySelector('.stats-section');
+
+
+                     if (guessInput) guessInput.disabled = true;
+                     if (compareButton) compareButton.disabled = true;
+                     if (giveUpForm) giveUpForm.style.display = 'none';
+                     if (playAgainForm) playAgainForm.style.display = 'none';
+                     if (thresholdsSection) thresholdsSection.style.display = 'none';
+                     if (poemSourceSection) poemSourceSection.style.display = 'none';
+                     if (statsSection) statsSection.style.display = 'none';
+                 });
+             </script>
+        {% else %}
+            <p id="game-intro">猜測一句五言詩句。輸入你的猜測後，會顯示詩句中每個字元的著色筆畫圖。筆畫的顏色反映了它與你最新和歷史最佳猜測字筆畫的相似度，正確的筆劃會顯示黑色，筆畫相似的將會標註為灰色，其顏色深淺依其相似程度而定。底下如果你猜得字顯示綠色代表猜中了，黃色代表猜的這個字確實在本句中，但不是你現在猜的位置。類似於Wordle的玩法，但不限定猜的內容要有意義</p>
+
+            <div id="poem-source-selection">
+                 <label for="poem_source">選擇題目範圍:</label>
+                 <select id="poem_source" name="poem_source">
+                     {% for filename, name in poem_sources.items() %}
+                         <option value="{{ filename }}" {% if filename == current_poem_source %}selected{% endif %}>{{ name }}</option>
+                     {% endfor %}
+                 </select>
+             </div>
+
+            <div id="message-area" class="message-area">
+            </div>
+
+            <form id="guess-form">
+                <div class="form-group">
+                    <label for="guess_line">你的猜測 (五個漢字):</label>
+                    <input type="text" id="guess_line" name="guess_line" maxlength="5" required value="">
+                </div>
+                 <button type="submit" id="compare-button">比較猜測詩句</button>
+            </form>
+
+            <p id="guess-count"></p>
+
+            <div id="colored-guess-line" class="colored-guess-line">
+            </div>
+
+            <div id="loading-indicator">計算中... 請稍候</div>
+
+            <div id="result-area" class="result-area" style="display: none;">
+                <h2>比較結果</h2>
+                <div id="result-images" class="result-images">
+                </div>
+                 <div id="result-info" class="result-info">
+                     圖片顯示了隱藏目標詩句中每個字元的筆畫，顏色基於你最新和歷史最佳猜測字筆畫的相似度。
+                 </div>
+            </div>
+
+            <div class="game-buttons">
+                 <form action="{{ url_for('new_poem') }}" method="get" id="give-up-form" style="display: none;">
+                     <button type="submit">放棄 / 新詩句</button>
+                 </form>
+                 <form action="{{ url_for('new_poem') }}" method="get" id="play-again-form" style="display: none;">
+                     <button type="submit">再玩一次 (新詩句)</button>
+                 </form>
+            </div>
+
+            <div id="full-poem-display" class="full-poem-display" style="display: none;">
+                <h3 id="poem-title"></h3>
+                <div id="poem-content"></div>
+            </div>
+
+            <div class="thresholds-section">
+                 <h2>著色閾值設定 (難度，下拉選單可以調整，或直接輸入數值)</h2>
+                <div class="thresholds-group">
+                     <div class="form-group">
+                         <label for="difficulty">難易度:</label>
+                         <select id="difficulty">
+                            <option value="master">大師 (8000/20000)</option>
+                            <option value="expert" selected>專家 (10000/25000)</option>
+                            <option value="proficient">熟練 (20000/35000)</option>
+                            <option value="average">平凡 (30000/50000)</option>
+                            <option value="beginner">初學 (60000/90000)</option>
+                            <option value="novice">菜雞 (90000/180000)</option>
+                         </select>
+                     </div>
+                    <div class="form-group">
+                        <label for="thresh1">閾值 1 (黑以下):</label>
+                        <input type="number" id="thresh1" name="thresh1" value="{{ defaults.thresh1 | default(10000) }}" step="1" min="0" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="thresh2">閾值 2 (隱藏以上):</label>
+                        <input type="number" id="thresh2" name="thresh2" value="{{ defaults.thresh2 | default(25000) }}" step="1" min="0" required readonly>
+                    </div>
+                </div>
+                 <div class="color-key">
+                    <div class="color-key-item"><div class="color-sample black"></div> < <span id="thresh-black"></span> 純黑</div>
+                    <div class="color-key-item"><div class="color-sample gray10"></div> <span id="thresh-grad-start-lower"></span> ~ <span id="thresh-grad-start-upper"></span> 漸變 (灰)</div>
+                    <div class="color-key-item"><div class="color-sample hidden"></div> ≥ <span id="thresh-hidden"></span> 或無匹配 隱藏</div>
+                </div>
+            </div>
+
+            <div id="stats-section" class="stats-section" style="display: none;">
+                 <h2>猜對詩句所需次數統計</h2>
+                 <img id="stats-plot" class="stats-plot" src="{{ url_for('stats_plot') }}">
+            </div>
+
+
+            <script id="initial-state-json" type="application/json">{{ initial_state | tojson }}</script>
+
+            <script>
+                const compareUrl = "{{ url_for('compare_poem_line') }}";
+                const newPoemUrl = "{{ url_for('new_poem') }}";
+                const statsPlotUrl = "{{ url_for('stats_plot') }}";
+
+                const difficultyThresholds = {
+                    master: [8000, 20000],
+                    expert: [10000, 25000],
+                    proficient: [20000, 35000],
+                    average: [30000, 50000],
+                    beginner: [60000, 90000],
+                    novice: [90000, 180000]
+                };
+
+                document.addEventListener('DOMContentLoaded', function() {
+
+                    let initialState = {};
+                    const initialStateScript = document.getElementById('initial-state-json');
+                    if (initialStateScript && initialStateScript.textContent) {
+                        try {
+                            initialState = JSON.parse(initialStateScript.textContent);
+                        } catch (e) {
+                            console.error("Error parsing initial state JSON:", e);
+                            displayMessages([{type: 'error', text: '載入遊戲狀態時發生錯誤.'}]);
+                        }
+                    }
+                    console.log("Parsed Initial State:", initialState);
+
+                    const guessForm = document.getElementById('guess-form');
+                    const guessInput = document.getElementById('guess_line');
+                    const messageArea = document.getElementById('message-area');
+                    const resultArea = document.getElementById('result-area');
+                    const resultImagesDiv = document.getElementById('result-images');
+                    const compareButton = document.getElementById('compare-button');
+                    const giveUpForm = document.getElementById('give-up-form');
+                    const playAgainForm = document.getElementById('play-again-form');
+                    const fullPoemDisplay = document.getElementById('full-poem-display');
+                    const poemTitle = document.getElementById('poem-title');
+                    const poemContent = document.getElementById('poem-content');
+
+                    const difficultySelect = document.getElementById('difficulty');
+                    const thresh1Input = document.getElementById('thresh1');
+                    const thresh2Input = document.getElementById('thresh2');
+
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    const thresholdsSection = document.querySelector('.thresholds-section');
+                    const guessCountDisplay = document.getElementById('guess-count');
+                    const coloredGuessLineDiv = document.getElementById('colored-guess-line');
+                    const poemSourceSelect = document.getElementById('poem_source');
+
+                    const statsSection = document.getElementById('stats-section');
+                    const statsPlotImg = document.getElementById('stats-plot');
+
+
+                    const threshBlackSpan = document.getElementById('thresh-black');
+                    const threshGradStartLowerSpan = document.getElementById('thresh-grad-start-lower');
+                    const threshGradStartUpperSpan = document.getElementById('thresh-grad-start-upper');
+                    const threshHiddenSpan = document.getElementById('thresh-hidden');
+
+
+                    function displayMessages(messages) {
+                        if (messageArea) {
+                           messageArea.innerHTML = '';
+                           messageArea.style.display = 'block';
+                           if (!messages || !Array.isArray(messages) || messages.length === 0) {
+                                messageArea.innerHTML = '';
+                                return;
+                           }
+
+                           messages.forEach(msg => {
+                               const msgElement = document.createElement('p');
+                               msgElement.classList.add('message', msg.type || 'info');
+                               msgElement.textContent = msg.text;
+                               messageArea.appendChild(msgElement);
+                           });
+                        }
+                    }
+
+                    function updatePlotImages(imageUrls, imageErrors, isLoading = false) {
+                        if (resultArea) resultArea.style.display = 'block';
+                        if (resultImagesDiv) {
+                            resultImagesDiv.innerHTML = '';
+
+                            for (let i = 0; i < 5; i++) {
+                                const imageUrl = imageUrls && Array.isArray(imageUrls) && imageUrls.length > i ? imageUrls[i] : null;
+                                const imageError = imageErrors && Array.isArray(imageErrors) && imageErrors.length > i ? imageErrors[i] : true;
+
+                                if (imageUrl && !imageError) {
+                                    const imgEl = document.createElement('img');
+                                    imgEl.alt = `Character Plot ${i+1}`;
+                                    const imageUrlWithCacheBuster = imageUrl + '?t=' + new Date().getTime();
+                                    imgEl.src = imageUrlWithCacheBuster;
+                                    resultImagesDiv.appendChild(imgEl);
+                                } else {
+                                    const placeholderEl = document.createElement('div');
+                                    placeholderEl.classList.add('image-placeholder');
+                                    placeholderEl.textContent = isLoading ? '載入中...' : '圖片失敗';
+                                    resultImagesDiv.appendChild(placeholderEl);
+                                }
+                            }
+                        }
+                    }
+
+                    function updateColorKeyThresholds(thresholds) {
+                         if (thresholds && typeof thresholds === 'object') {
+                            if (thresh1Input) thresh1Input.value = thresholds.thresh1 !== undefined ? thresholds.thresh1 : '值';
+                            if (thresh2Input) thresh2Input.value = thresholds.thresh2 !== undefined ? thresholds.thresh2 : '值';
+
+                            if (threshBlackSpan) threshBlackSpan.textContent = thresholds.thresh1 !== undefined ? thresholds.thresh1 : '值';
+                            if (threshGradStartLowerSpan) threshGradStartLowerSpan.textContent = thresholds.thresh1 !== undefined ? thresholds.thresh1 : '值';
+                            if (threshGradStartUpperSpan) threshGradStartUpperSpan.textContent = thresholds.thresh2 !== undefined ? thresholds.thresh2 : '值';
+                            if (threshHiddenSpan) threshHiddenSpan.textContent = thresholds.thresh2 !== undefined ? thresholds.thresh2 : '值';
+                         } else {
+                             if (thresh1Input) thresh1Input.value = '值';
+                             if (thresh2Input) thresh2Input.value = '值';
+                             if (threshBlackSpan) threshBlackSpan.textContent = '值';
+                             if (threshGradStartLowerSpan) threshGradStartLowerSpan.textContent = '值';
+                             if (threshGradStartUpperSpan) threshGradStartUpperSpan.textContent = '值';
+                             if (threshHiddenSpan) threshHiddenSpan.textContent = '值';
+                         }
+                    }
+
+                    function updateGuessCount(count) {
+                        if (guessCountDisplay) {
+                             if (count > 0) {
+                                guessCountDisplay.textContent = `猜測次數: ${count}`;
+                             } else {
+                                guessCountDisplay.textContent = '';
+                             }
+                        }
+                    }
+
+                    function displayColoredGuessLine(guessLine, targetLine) {
+                         if (coloredGuessLineDiv && typeof guessLine === 'string' && typeof targetLine === 'string' && targetLine.length === 5) {
+                             let coloredHtml = '';
+                             const targetChars = targetLine.split('');
+                             const guessChars = guessLine.split('');
+
+                             for (let i = 0; i < guessChars.length; i++) {
+                                 const guessChar = guessChars[i];
+                                 let className = 'guess-char-not-in-word';
+
+                                 if (targetChars[i] === guessChar) {
+                                     className = 'guess-char-correct';
+                                 } else if (targetChars.includes(guessChar)) {
+                                     className = 'guess-char-wrong-pos';
+                                 }
+
+                                 coloredHtml += `<span class="${className}">${guessChar}</span>`;
+                             }
+                             coloredGuessLineDiv.innerHTML = coloredHtml;
+                         } else if (coloredGuessLineDiv) {
+                              coloredGuessLineDiv.innerHTML = '';
+                         }
+                    }
+
+                    function setThresholdsByDifficulty() {
+                         if (difficultySelect && thresh1Input && thresh2Input) {
+                             const selectedDifficulty = difficultySelect.value;
+                             const thresholds = difficultyThresholds[selectedDifficulty];
+                             if (thresholds) {
+                                 thresh1Input.value = thresholds[0];
+                                 thresh2Input.value = thresholds[1];
+                                 updateColorKeyThresholds({ thresh1: thresholds[0], thresh2: thresholds[1] });
+                             } else {
+                                 console.error("Invalid difficulty selected:", selectedDifficulty);
+                             }
+                         }
+                    }
+
+                    function enableFormAndButtons() {
+                         if(compareButton) { compareButton.disabled = false; compareButton.style.display = 'block'; }
+                         if(guessInput) guessInput.disabled = false;
+                         if(thresh1Input) thresh1Input.disabled = false;
+                         if(thresh2Input) thresh2Input.disabled = false;
+                         if(difficultySelect) difficultySelect.disabled = false;
+                         if(poemSourceSelect) poemSourceSelect.disabled = false;
+
+                         if(guessForm) guessForm.style.display = 'flex';
+                         if(giveUpForm) giveUpForm.style.display = 'block';
+                         if(playAgainForm) playAgainForm.style.display = 'none';
+                         if(fullPoemDisplay) fullPoemDisplay.style.display = 'none';
+                    }
+
+                     function disableFormAndButtons() {
+                         if(compareButton) compareButton.disabled = true;
+                         if(guessInput) guessInput.disabled = true;
+                         if(thresh1Input) thresh1Input.disabled = true;
+                         if(thresh2Input) thresh2Input.disabled = true;
+                         if(difficultySelect) difficultySelect.disabled = true;
+                         if(poemSourceSelect) poemSourceSelect.disabled = true;
+                     }
+
+                    function updateStatsPlot() {
+                         if (statsPlotImg) {
+                             statsPlotImg.src = statsPlotUrl + '?t=' + new Date().getTime();
+                             if (statsSection) statsSection.style.display = 'block';
+                         }
+                    }
+
+
+                    if (difficultySelect) {
+                        difficultySelect.addEventListener('change', setThresholdsByDifficulty);
+                    }
+
+                    if (poemSourceSelect) {
+                        poemSourceSelect.addEventListener('change', function() {
+                            const redirectUrl = `${newPoemUrl}?source=${encodeURIComponent(poemSourceSelect.value)}`;
+                            window.location.href = redirectUrl;
+                        });
+                    }
+
+
+                    if(guessForm) {
+                         const poemSourceHiddenInput = document.createElement('input');
+                         poemSourceHiddenInput.type = 'hidden';
+                         poemSourceHiddenInput.name = 'poem_source';
+                         if(poemSourceSelect) poemSourceHiddenInput.value = poemSourceSelect.value;
+                         guessForm.appendChild(poemSourceHiddenInput);
+
+                         if (poemSourceSelect) {
+                             poemSourceSelect.addEventListener('change', function() {
+                                 poemSourceHiddenInput.value = poemSourceSelect.value;
+                             });
+                         }
+
+                         guessForm.addEventListener('submit', function(event) {
+                             event.preventDefault();
+
+                             const guessLine = guessInput ? guessInput.value.trim() : '';
+                             const thresh1 = thresh1Input ? thresh1Input.value : '';
+                             const thresh2 = thresh2Input ? thresh2Input.value : '';
+                             const selectedPoemSource = poemSourceSelect ? poemSourceSelect.value : '';
+
+                             if (guessLine.length !== 5) {
+                                 displayMessages([{type: 'error', text: `請輸入剛好五個漢字進行猜測 (你輸入了 ${guessLine.length} 個字).`}]);
+                                 if (coloredGuessLineDiv) coloredGuessLineDiv.innerHTML = '';
+                                 return;
+                             }
+
+                              try {
+                                  const t1 = parseFloat(thresh1);
+                                  const t2 = parseFloat(thresh2);
+                                  if (isNaN(t1) || isNaN(t2) || t1 < 0 || t2 < 0 || t1 > t2) {
+                                      displayMessages([{type: 'error', text: "無效的閾值順序或值. 請確保 0 ≤ 閾值 1 ≤ 閾值 2, 且輸入為數字."}]);
+                                      if (coloredGuessLineDiv) coloredGuessLineDiv.innerHTML = '';
+                                      return;
+                                  }
+                              } catch (e) {
+                                  displayMessages([{type: 'error', text: "無效的閾值輸入. 請輸入數字."}]);
+                                  if (coloredGuessLineDiv) coloredGuessLineDiv.innerHTML = '';
+                                  return;
+                              }
+
+                             displayMessages([]);
+                              const loadingPlaceholders = Array(5).fill(null);
+                              const loadingPlaceholderErrors = Array(5).fill(true);
+                              updatePlotImages(loadingPlaceholders, loadingPlaceholderErrors, true);
+                              if(resultArea) resultArea.style.display = 'block';
+
+                             disableFormAndButtons();
+                             if(loadingIndicator) loadingIndicator.style.display = 'block';
+
+
+                             const formData = new FormData();
+                             formData.append('guess_line', guessLine);
+                             formData.append('thresh1', thresh1);
+                             formData.append('thresh2', thresh2);
+                             formData.append('poem_source', selectedPoemSource);
+
+                             fetch(compareUrl, {
+                                 method: 'POST',
+                                 body: formData
+                             })
+                             .then(response => {
+                                 if (!response.ok) {
+                                     return response.json().then(err => {
+                                         const serverMessageText = err.messages && Array.isArray(err.messages) && err.messages.length > 0 ?
+                                                               err.messages.map(m => m.text).join(', ') :
+                                                               `HTTP 錯誤 ${response.status}`;
+                                         const errorObj = new Error(serverMessageText);
+                                         errorObj.serverData = err;
+                                         throw errorObj;
+                                     }).catch(jsonError => {
+                                          console.error("Error parsing server JSON error response:", jsonError);
+                                          throw new Error(`HTTP 錯誤 ${response.status}`);
+                                     });
+                                 }
+                                 return response.json();
+                             })
+                             .then(data => {
+                                 console.log("Server Response:", data);
+
+                                 displayMessages(data.messages);
+
+                                 if (data.guess_count !== undefined) {
+                                     updateGuessCount(data.guess_count);
+                                 }
+
+                                 const currentTargetLine = data.target_line || (initialState ? initialState.target_line : null);
+                                 if (currentTargetLine) {
+                                     displayColoredGuessLine(guessLine, currentTargetLine);
+                                      if (data.target_line) {
+                                           initialState.target_line = data.target_line;
+                                      }
+                                 } else {
+                                     console.error("Target line not available for coloring guess.");
+                                     if (coloredGuessLineDiv) coloredGuessLineDiv.textContent = guessLine;
+                                 }
+
+
+                                 if (data.thresholds) {
+                                     const receivedThresh1 = parseFloat(data.thresholds.thresh1);
+                                     const receivedThresh2 = parseFloat(data.thresholds.thresh2);
+                                      let matchingDifficulty = null;
+                                      for (const [key, values] of Object.entries(difficultyThresholds)) {
+                                          if (values[0] === receivedThresh1 && values[1] === receivedThresh2) {
+                                              matchingDifficulty = key;
+                                              break;
+                                          }
+                                      }
+                                      if (difficultySelect && matchingDifficulty) {
+                                          difficultySelect.value = matchingDifficulty;
+                                      }
+
+                                     updateColorKeyThresholds(data.thresholds);
+
+                                 } else {
+                                     console.warn("Server response missing 'thresholds'.");
+                                     displayMessages([{type: 'warning', text: '伺服器回應缺少閾值資料.'}]);
+                                      const currentThresholdsFromInputs = {
+                                          thresh1: thresh1Input ? thresh1Input.value : '值',
+                                          thresh2: thresh2Input ? thresh2Input.value : '值'
+                                      };
+                                      updateColorKeyThresholds(currentThresholdsFromInputs);
+                                 }
+
+                                 if (data.image_urls && Array.isArray(data.image_urls) && data.image_urls.length === 5) {
+                                     updatePlotImages(data.image_urls, data.image_errors || [false, false, false, false, false], false);
+                                 } else {
+                                     displayMessages([{type: 'warning', text: '伺務器回應中的圖片資料格式不正確或遺失.'}]);
+                                     const emptyPlaceholders = Array(5).fill(null);
+                                     const emptyPlaceholderErrors = Array(5).fill(true);
+                                     updatePlotImages(emptyPlaceholders, emptyPlaceholderErrors, false);
+                                 }
+
+                                 if (data.is_correct_guess) {
+                                     if(guessForm) guessForm.style.display = 'none';
+                                     if(compareButton) compareButton.style.display = 'none';
+                                     if(giveUpForm) giveUpForm.style.display = 'none';
+                                     if(playAgainForm) playAgainForm.style.display = 'block';
+
+                                     updateStatsPlot();
+
+                                     if (data.poem_info) {
+                                         if(fullPoemDisplay) fullPoemDisplay.style.display = 'block';
+                                         if(poemTitle) poemTitle.textContent = data.poem_info.title || '未知詩名';
+                                         if(poemContent) poemContent.innerHTML = '';
+                                         const currentTargetLine = data.target_line || (initialState ? initialState.target_line : null);
+
+                                         if (Array.isArray(data.poem_info.content) && poemContent) {
+                                             data.poem_info.content.forEach(line => {
+                                                 const pEl = document.createElement('p');
+                                                 pEl.textContent = line;
+                                                 if (line === currentTargetLine) {
+                                                     pEl.classList.add('target-line');
+                                                 }
+                                                 poemContent.appendChild(pEl);
+                                             });
+                                         }
+                                     } else {
+                                          console.warn("Server response is_correct_guess=true but missing 'poem_info'.");
+                                          displayMessages([{type: 'warning', text: '伺服器指示猜對但未提供詩詞資訊.'}]);
+                                     }
+
+                                 } else {
+                                     enableFormAndButtons();
+                                     if(fullPoemDisplay) fullPoemDisplay.style.display = 'none';
+                                 }
+
+                             })
+                             .catch(error => {
+                                 console.error('Fetch Error:', error);
+                                 displayMessages([{type: 'error', text: `與伺服器通訊時發生錯誤: ${error.message}`}]);
+
+                                 enableFormAndButtons();
+
+                                 const errorPlaceholders = Array(5).fill(null);
+                                 const errorPlaceholderErrors = Array(5).fill(true);
+                                 updatePlotImages(errorPlaceholders, errorPlaceholderErrors, false);
+                                  if(resultArea) resultArea.style.display = 'block';
+
+                                   const currentThresholdsFromInputs = {
+                                       thresh1: thresh1Input ? thresh1Input.value : '值',
+                                       thresh2: thresh2Input ? thresh2Input.value : '值'
+                                   };
+                                   updateColorKeyThresholds(currentThresholdsFromInputs);
+
+                                  if (coloredGuessLineDiv) coloredGuessLineLineDiv.innerHTML = '';
+
+
+                             })
+                             .finally(() => {
+                                 if(loadingIndicator) loadingIndicator.style.display = 'none';
+                             });
+                         });
+                    }
+
+                    if (initialState.thresholds) {
+                        updateColorKeyThresholds(initialState.thresholds);
+                         const initialThresh1 = parseFloat(initialState.thresholds.thresh1);
+                         const initialThresh2 = parseFloat(initialState.thresholds.thresh2);
+                          let initialMatchingDifficulty = null;
+                          for (const [key, values] of Object.entries(difficultyThresholds)) {
+                              if (values[0] === initialThresh1 && values[1] === initialThresh2) {
+                                  initialMatchingDifficulty = key;
+                                  break;
+                              }
+                          }
+                          if (difficultySelect && initialMatchingDifficulty) {
+                              difficultySelect.value = initialMatchingDifficulty;
+                          }
+                     } else {
+                        const currentThresholdsFromInputs = {
+                           thresh1: thresh1Input ? thresh1Input.value : '值',
+                           thresh2: thresh2Input ? thresh2Input.value : '值'
+                        };
+                        updateColorKeyThresholds(currentThresholdsFromInputs);
+                     }
+
+                    updateGuessCount(initialState.guess_count !== undefined ? initialState.guess_count : 0);
+
+                     if (initialState.is_correct_guess && initialState.target_line) {
+                          displayColoredGuessLine(initialState.target_line, initialState.target_line);
+                          disableFormAndButtons();
+                           if(guessForm) guessForm.style.display = 'none';
+                           if(compareButton) compareButton.style.display = 'none';
+                           if(giveUpForm) giveUpForm.style.display = 'none';
+                           if(playAgainForm) playAgainForm.style.display = 'block';
+
+                           updateStatsPlot();
+
+                           if(fullPoemDisplay && initialState.poem_info) {
+                               fullPoemDisplay.style.display = 'block';
+                               if(poemTitle) poemTitle.textContent = initialState.poem_info.title || '未知詩名';
+                               if(poemContent) poemContent.innerHTML = '';
+                               const currentTargetLine = initialState.target_line;
+
+                               if (Array.isArray(initialState.poem_info.content) && poemContent) {
+                                   initialState.poem_info.content.forEach(line => {
+                                        const pEl = document.createElement('p');
+                                        pEl.textContent = line;
+                                        if (line === currentTargetLine) {
+                                             pEl.classList.add('target-line');
+                                        }
+                                        poemContent.appendChild(pEl);
+                                   });
+                               }
+                           }
+
+                     } else {
+                          if (coloredGuessLineDiv) coloredGuessLineDiv.innerHTML = '';
+                           if(guessForm) guessForm.style.display = 'flex';
+                           if(compareButton) compareButton.style.display = 'block';
+                           if(giveUpForm) giveUpForm.style.display = 'block';
+                           if(playAgainForm) playAgainForm.style.display = 'none';
+                           if(fullPoemDisplay) fullPoemDisplay.style.display = 'none';
+                     }
+
+                     if (initialState.guess_count_history && initialState.guess_count_history.length > 0) {
+                         updateStatsPlot();
+                     }
+
+
+                     if (poemSourceSelect && initialState.current_poem_source) {
+                         poemSourceSelect.value = initialState.current_poem_source;
+                     }
+
+                });
+            </script>
+        {% endif %}
+    </div>
+</body>
+</html>
