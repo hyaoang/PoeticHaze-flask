@@ -1,0 +1,6 @@
+Flask
+matplotlib
+numpy
+fastdtw
+gunicorn
+scipy
