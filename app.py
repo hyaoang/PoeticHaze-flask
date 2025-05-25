@@ -679,6 +679,7 @@ def index():
 
 
 @app.route('/compare', methods=['POST'])
+@app.route('/compare', methods=['POST'])
 def compare_poem_line():
     response_data = {
         'status': 'success',
@@ -691,245 +692,287 @@ def compare_poem_line():
         'guess_count': 0,
         'debug_info': {},
         'target_line': None
-    };
+    }
 
     if GAME_LOAD_ERROR:
-        response_data['status'] = 'error';
-        response_data['messages'].append({'type': 'error', 'text': f"應用程式載入錯誤: {GAME_LOAD_ERROR}"});
-        return jsonify(response_data), 500;
+        response_data['status'] = 'error'
+        response_data['messages'].append({'type': 'error', 'text': f"應用程式載入錯誤: {GAME_LOAD_ERROR}"})
+        return jsonify(response_data), 500
 
-    guess_line = request.form.get('guess_line', '').strip();
+    guess_line = request.form.get('guess_line', '').strip()
     try:
-        thresh1 = float(request.form.get('thresh1', 10000));
-        thresh2 = float(request.form.get('thresh2', 25000));
-        response_data['thresholds'] = {'thresh1': thresh1, 'thresh2': thresh2};
+        thresh1 = float(request.form.get('thresh1', 10000))
+        thresh2 = float(request.form.get('thresh2', 25000))
+        response_data['thresholds'] = {'thresh1': thresh1, 'thresh2': thresh2}
 
         if thresh1 < 0 or thresh2 < 0:
-             raise ValueError("閾值必須為非負數.");
+             raise ValueError("閾值必須為非負數.")
         if thresh1 > thresh2:
-             raise ValueError("閾值 1 不能大於閾值 2.");
-
-        session['thresholds'] = response_data['thresholds'];
-        session.modified = True;
-
+             raise ValueError("閾值 1 不能大於閾值 2.")
+        session['thresholds'] = response_data['thresholds']
+        session.modified = True
     except ValueError as e:
-        response_data['status'] = 'error';
-        response_data['messages'].append({'type': 'error', 'text': f"無效的閾值輸入: {e}"});
-        return jsonify(response_data), 400;
+        response_data['status'] = 'error'
+        response_data['messages'].append({'type': 'error', 'text': f"無效的閾值輸入: {e}"})
+        return jsonify(response_data), 400
 
     selected_source = request.form.get('poem_source', DEFAULT_POEMS_SOURCE)
     if selected_source not in POEMS_SOURCES:
          selected_source = DEFAULT_POEMS_SOURCE
-         response_data['messages'].append({'type': 'warning', 'text': '無效的題庫選擇，已回退到預設題庫。'});
+         response_data['messages'].append({'type': 'warning', 'text': '無效的題庫選擇，已回退到預設題庫。'})
 
     if session.get('current_poem_source', DEFAULT_POEMS_SOURCE) != selected_source:
-         print(f"使用者變更了題庫來源從 '{session.get('current_poem_source')}' 到 '{selected_source}'. 初始化新遊戲.");
+         print(f"使用者變更了題庫來源從 '{session.get('current_poem_source')}' 到 '{selected_source}'. 初始化新遊戲.")
          session['current_poem_source'] = selected_source
-         session.modified = True;
-         if not initialize_game_session():
-              error_msg = f"無法初始化新遊戲，當前選擇的題庫 ('{POEMS_SOURCES.get(selected_source)}') 沒有可用的詩句.";
-              response_data['status'] = 'error';
-              response_data['messages'].append({'type': 'error', 'text': error_msg});
-              return jsonify(response_data), 500;
+         session.modified = True
+         if not initialize_game_session(): # Make sure initialize_game_session is defined
+              error_msg = f"無法初始化新遊戲，當前選擇的題庫 ('{POEMS_SOURCES.get(selected_source)}') 沒有可用的詩句."
+              response_data['status'] = 'error'
+              response_data['messages'].append({'type': 'error', 'text': error_msg})
+              return jsonify(response_data), 500
 
-    is_valid_session, session_message = validate_session_state();
+    is_valid_session, session_message = validate_session_state() # Make sure validate_session_state is defined
     if not is_valid_session:
-        response_data['status'] = 'error';
-        response_data['messages'].append({'type': 'error', 'text': f"遊戲狀態錯誤或已過期: {session_message}. 請重新開始新遊戲."});
-        print(f"Session 無效於 /compare, 嘗試重新初始化: {session_message}");
+        response_data['status'] = 'error'
+        response_data['messages'].append({'type': 'error', 'text': f"遊戲狀態錯誤或已過期: {session_message}. 請重新開始新遊戲."})
+        print(f"Session 無效於 /compare, 嘗試重新初始化: {session_message}")
         if 'poem_game_state' in session:
             old_history = session['poem_game_state'].get('guess_count_history', [])
-            session['poem_game_state'] = {'guess_count_history': old_history}
+            session['poem_game_state'] = {'guess_count_history': old_history} # Preserve history if possible
             session.modified = True
         if not initialize_game_session():
-             error_msg = f"無法初始化新遊戲，當前選擇的題庫 ('{POEMS_SOURCES.get(session.get('current_poem_source'))}') 沒有可用的詩句.";
-             response_data['status'] = 'error';
-             response_data['messages'].append({'type': 'error', 'text': error_msg});
-             return jsonify(response_data), 500;
-
+             error_msg = f"無法初始化新遊戲，當前選擇的題庫 ('{POEMS_SOURCES.get(session.get('current_poem_source'))}') 沒有可用的詩句."
+             response_data['status'] = 'error'
+             response_data['messages'].append({'type': 'error', 'text': error_msg})
+             return jsonify(response_data), 500
 
     if len(guess_line) != 5:
-        response_data['status'] = 'error';
-        response_data['messages'].append({'type': 'error', 'text': f"請輸入剛好五個漢字進行猜測 (你輸入了 {len(guess_line)} 個字)."});
-        return jsonify(response_data), 400;
+        response_data['status'] = 'error'
+        response_data['messages'].append({'type': 'error', 'text': f"請輸入剛好五個漢字進行猜測 (你輸入了 {len(guess_line)} 個字)."})
+        return jsonify(response_data), 400
 
-    missing_chars = [char for char in guess_line if char not in ALL_CHARACTERS_DATA];
+    missing_chars = [char for char in guess_line if char not in ALL_CHARACTERS_DATA]
     if missing_chars:
-        response_data['status'] = 'error';
-        response_data['messages'].append({'type': 'error', 'text': f"你的猜測詩句中包含不合法的字元: {''.join(missing_chars)}."});
-        return jsonify(response_data), 400;
+        response_data['status'] = 'error'
+        response_data['messages'].append({'type': 'error', 'text': f"你的猜測詩句中包含不合法的字元: {''.join(missing_chars)}."})
+        return jsonify(response_data), 400
 
-    game_state = session['poem_game_state'];
-    target_line = game_state['target_line'];
-    char_histories = game_state['char_histories'];
+    game_state = session['poem_game_state']
+    target_line = game_state['target_line']
+    char_histories = game_state['char_histories']
 
-    game_state['guess_count'] += 1;
-    response_data['guess_count'] = game_state['guess_count'];
-    response_data['target_line'] = target_line;
+    game_state['guess_count'] += 1
+    response_data['guess_count'] = game_state['guess_count']
+    response_data['target_line'] = target_line
 
     current_valid_lines = VALID_POEM_LINES_MAP.get(session.get('current_poem_source', DEFAULT_POEMS_SOURCE), [])
     current_poem_info_map = POEM_INFO_MAP_MAP.get(session.get('current_poem_source', DEFAULT_POEMS_SOURCE), {})
 
     if any(char not in ALL_CHARACTERS_DATA for char in target_line) or target_line not in current_valid_lines:
-         response_data['status'] = 'error';
-         response_data['messages'].append({'type': 'error', 'text': f"內部錯誤: 當前目標詩句 '{target_line}' 包含無效字元或不在當前題庫中. 請重新開始新遊戲."});
-         initialize_game_session();
-         return jsonify(response_data), 500;
+         response_data['status'] = 'error'
+         response_data['messages'].append({'type': 'error', 'text': f"內部錯誤: 當前目標詩句 '{target_line}' 包含無效字元或不在當前題庫中. 請重新開始新遊戲."})
+         if initialize_game_session: initialize_game_session() # Attempt to reset
+         return jsonify(response_data), 500
 
-    any_plot_failed = False;
-    partial_failure = False;
+    any_plot_failed = False
+    partial_failure = False
 
-    guess_char_stroke_paths_map = {char: ALL_CHARACTERS_DATA.get(char, []) for char in set(guess_line)};
+    guess_char_stroke_paths_map = {char: ALL_CHARACTERS_DATA.get(char, []) for char in set(guess_line)}
 
-    for i in range(5):
-        target_char = target_line[i];
-        guess_char = guess_line[i];
-        char_history = char_histories[i];
+    for i in range(5): # Loop for each of the 5 characters in the poem line
+        target_char = target_line[i]
+        guess_char = guess_line[i]
+        char_history = char_histories[i]
 
-        target_stroke_paths = ALL_CHARACTERS_DATA.get(target_char, []);
-        guess_stroke_paths = guess_char_stroke_paths_map.get(guess_char, []);
+        target_stroke_paths = ALL_CHARACTERS_DATA.get(target_char, [])
+        guess_stroke_paths = guess_char_stroke_paths_map.get(guess_char, [])
 
-        target_segments_with_original_index = get_comparable_segments_with_original_index(target_char, ALL_CHARACTERS_DATA);
-        guess_segments_with_original_index = get_comparable_segments_with_original_index(guess_char, ALL_CHARACTERS_DATA);
+        # IMPORTANT REMINDER: The performance of DTW heavily depends on the number of points
+        # in these segments. Ensure `get_comparable_segments_with_original_index` calls
+        # `parse_svg_path` with a reduced `num_curve_points` (e.g., 5 to 10 instead of 30)
+        # to avoid timeouts. See the placeholder for get_comparable_segments_with_original_index above.
+        target_segments_with_original_index = get_comparable_segments_with_original_index(target_char, ALL_CHARACTERS_DATA)
+        guess_segments_with_original_index = get_comparable_segments_with_original_index(guess_char, ALL_CHARACTERS_DATA)
 
-        current_best_match_info_for_char = {};
-        plot_successful = False;
+        current_best_match_info_for_char = {}
+        # plot_successful = False # This was in original, seems unused for DTW part
 
-        try:
+        try: # Outer try for this character's comparison logic
             if not target_stroke_paths or not guess_stroke_paths:
-                 msg = f"位置 {i+1} 字元 '{target_char}' 或猜測字 '{guess_char}' 沒有筆畫資料.";
-                 response_data['messages'].append({'type': 'error', 'text': msg});
-                 response_data['status'] = 'warning';
-                 any_plot_failed = True;
-                 continue;
+                 msg = f"位置 {i+1} 字元 '{target_char}' 或猜測字 '{guess_char}' 沒有筆畫資料."
+                 response_data['messages'].append({'type': 'error', 'text': msg})
+                 # response_data['status'] = 'warning' # Keep status as is or change if critical
+                 any_plot_failed = True # This will likely prevent image generation or show error for it
+                 continue # Skip to the next character if essential data is missing
 
             if not target_segments_with_original_index or not guess_segments_with_original_index:
-                msg = f"位置 {i+1} ({target_char} vs {guess_char}): 沒有足夠點數的可比較筆畫段 (需要 >=2 點). 無法計算相似度.";
-                response_data['messages'].append({'type': 'warning', 'text': msg});
-                partial_failure = True;
-                pass;
-
-            else:
-                num_guess_segments_comp = len(guess_segments_with_original_index);
-                num_target_segments_comp = len(target_segments_with_original_index);
-                segment_dtw_matrix = np.full((num_guess_segments_comp, num_target_segments_comp), np.inf);
+                msg = f"位置 {i+1} ({target_char} vs {guess_char}): 沒有足夠點數的可比較筆畫段 (需要 >=2 點). 無法計算相似度."
+                response_data['messages'].append({'type': 'warning', 'text': msg})
+                partial_failure = True
+                # If no segments, DTW matrix calculation below will be skipped or might fail if not handled.
+                # The 'else' block handles this.
+                # 'pass' was here, meaning it would fall through to plotting, which might be okay if char_history is empty.
+            
+            # Only proceed with DTW if we have segments to compare
+            if target_segments_with_original_index and guess_segments_with_original_index:
+                num_guess_segments_comp = len(guess_segments_with_original_index)
+                num_target_segments_comp = len(target_segments_with_original_index)
+                segment_dtw_matrix = np.full((num_guess_segments_comp, num_target_segments_comp), np.inf)
 
                 for seg_g_idx, (seg_g, original_g_idx) in enumerate(guess_segments_with_original_index):
                     for seg_t_idx, (seg_t, original_t_idx) in enumerate(target_segments_with_original_index):
-                         try:
-                            alignment = dtw.dtw(seg_g, seg_t);
-                            segment_dtw_matrix[seg_g_idx, seg_t_idx] = alignment.distance;
-                         except Exception as dtw_e:
-                            print(f"Warning: DTW 計算失敗於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} 段 vs 目標 '{target_char}' 筆畫 {original_t_idx+1} 段): {dtw_e}");
-                            pass;
+                        
+                        # --- START: Integrated DTW calculation and error handling ---
+                        if not isinstance(seg_g, np.ndarray) or seg_g.size == 0 or \
+                           not isinstance(seg_t, np.ndarray) or seg_t.size == 0:
+                            print(f"Warning: 無效或空的筆劃段用於 DTW 於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}). 跳過.")
+                            segment_dtw_matrix[seg_g_idx, seg_t_idx] = float('inf')
+                            continue # Skip this specific pair of segments
 
-                num_target_original_strokes = len(target_stroke_paths);
-                num_guess_original_strokes = len(guess_stroke_paths);
+                        try:
+                            euclidean_dist_func = lambda a, b: np.linalg.norm(np.array(a) - np.array(b), ord=2)
+                            alignment = dtw.dtw(seg_g, seg_t, dist=euclidean_dist_func)
+
+                            if hasattr(alignment, 'distance'):
+                                segment_dtw_matrix[seg_g_idx, seg_t_idx] = alignment.distance
+                            elif isinstance(alignment, tuple) and len(alignment) >= 1 and isinstance(alignment[0], (float, np.floating)):
+                                print(f"INFO: dtw.dtw 返回了元組。使用第一個元素作為距離，位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}).")
+                                segment_dtw_matrix[seg_g_idx, seg_t_idx] = alignment[0]
+                            else:
+                                print(f"ERROR: dtw.dtw 返回了無法處理的非預期類型或結構: {type(alignment)} 於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}). Value: {str(alignment)[:200]}")
+                                segment_dtw_matrix[seg_g_idx, seg_t_idx] = float('inf')
+                        
+                        except Exception as dtw_e:
+                            print(f"Warning: DTW 計算異常于位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} 段 vs 目標 '{target_char}' 筆畫 {original_t_idx+1} 段): {dtw_e}")
+                            segment_dtw_matrix[seg_g_idx, seg_t_idx] = float('inf')
+                        # --- END: Integrated DTW calculation and error handling ---
+
+                # This part finds the best matching guess stroke for each target stroke
+                num_target_original_strokes = len(target_stroke_paths)
+                num_guess_original_strokes = len(guess_stroke_paths)
 
                 for target_original_index in range(num_target_original_strokes):
-                    min_dist_for_this_target_stroke = float('inf');
-                    best_matching_guess_original_index_for_this_target_stroke = None;
+                    min_dist_for_this_target_stroke = float('inf')
+                    best_matching_guess_original_index_for_this_target_stroke = None
 
                     target_comparable_indices_map = [
                         idx for idx, (seg, original_idx) in enumerate(target_segments_with_original_index)
                         if original_idx == target_original_index
-                    ];
+                    ]
 
                     if not target_comparable_indices_map:
-                        continue;
+                        continue
 
                     for guess_original_index in range(num_guess_original_strokes):
                         guess_comparable_indices_map = [
                             idx for idx, (seg, original_idx) in enumerate(guess_segments_with_original_index)
                             if original_idx == guess_original_index
-                        ];
+                        ]
 
                         if not guess_comparable_indices_map:
-                             continue;
+                             continue
 
                         try:
-                            submatrix = segment_dtw_matrix[np.ix_(guess_comparable_indices_map, target_comparable_indices_map)];
-                            min_dist_between_strokes = np.min(submatrix) if submatrix.size > 0 else float('inf');
+                            # Ensure indices are valid for segment_dtw_matrix
+                            if not guess_comparable_indices_map or not target_comparable_indices_map:
+                                submatrix_min_dist = float('inf')
+                            else:
+                                # Check bounds to prevent IndexError if matrix is smaller than expected
+                                max_g_idx = max(guess_comparable_indices_map)
+                                max_t_idx = max(target_comparable_indices_map)
+                                if max_g_idx < segment_dtw_matrix.shape[0] and max_t_idx < segment_dtw_matrix.shape[1]:
+                                    submatrix = segment_dtw_matrix[np.ix_(guess_comparable_indices_map, target_comparable_indices_map)]
+                                    submatrix_min_dist = np.min(submatrix) if submatrix.size > 0 else float('inf')
+                                else:
+                                    print(f"Warning: Index out of bounds for submatrix at pos {i}, target_stroke {target_original_index}, guess_stroke {guess_original_index}")
+                                    submatrix_min_dist = float('inf')
 
-                            if min_dist_between_strokes < min_dist_for_this_target_stroke:
-                                 min_dist_for_this_target_stroke = min_dist_between_strokes;
-                                 best_matching_guess_original_index_for_this_target_stroke = guess_original_index;
+
+                            if submatrix_min_dist < min_dist_for_this_target_stroke:
+                                 min_dist_for_this_target_stroke = submatrix_min_dist
+                                 best_matching_guess_original_index_for_this_target_stroke = guess_original_index
 
                         except Exception as submatrix_e:
-                             print(f"Warning: 尋找位置 {i} 目標筆畫 {target_original_index+1} 與猜測筆畫 {guess_original_index+1} 之間的最小距離時發生錯誤: {submatrix_e}");
-                             pass;
+                             print(f"Warning: 尋找位置 {i} 目標筆畫 {target_original_index+1} 與猜測筆畫 {guess_original_index+1} 之間的最小距離時發生錯誤: {submatrix_e}")
+                             pass # min_dist_for_this_target_stroke remains unchanged or inf
 
                     if not np.isinf(min_dist_for_this_target_stroke) and best_matching_guess_original_index_for_this_target_stroke is not None:
                          current_best_match_info_for_char[target_original_index] = {
                              'guess_stroke_index': best_matching_guess_original_index_for_this_target_stroke,
                              'distance': min_dist_for_this_target_stroke
-                         };
-
+                         }
+                         # Update history if this guess is better for this target stroke
                          if target_original_index < len(char_history.get('stroke_histories', [])):
-                              hist_stroke_info = char_history['stroke_histories'][target_original_index];
+                              hist_stroke_info = char_history['stroke_histories'][target_original_index]
                               if min_dist_for_this_target_stroke < hist_stroke_info.get('min_dist', float('inf')):
-                                  hist_stroke_info['min_dist'] = min_dist_for_this_target_stroke;
-                                  hist_stroke_info['best_guess_char'] = guess_char;
-                                  hist_stroke_info['best_guess_stroke_index'] = best_matching_guess_original_index_for_this_target_stroke;
+                                  hist_stroke_info['min_dist'] = min_dist_for_this_target_stroke
+                                  hist_stroke_info['best_guess_char'] = guess_char
+                                  hist_stroke_info['best_guess_stroke_index'] = best_matching_guess_original_index_for_this_target_stroke
+            # else: (if not target_segments_with_original_index or not guess_segments_with_original_index)
+            #   No DTW calculation was performed, char_history for this char won't be updated with new distances.
+            #   Plotting will use existing char_history.
+
+        except Exception as comp_e: # Handles errors in the character comparison logic (outside DTW loops)
+            print(f"錯誤: 處理位置 {i} 字元 '{target_char}' vs '{guess_char}' 的比較邏輯時發生錯誤: {comp_e}")
+            traceback.print_exc()
+            response_data['messages'].append({'type': 'error', 'text': f"位置 {i+1} 字元比較失敗: {comp_e}"})
+            # response_data['status'] = 'warning' # Or 'error' if critical
+            any_plot_failed = True # Mark that plotting for this char might be compromised
 
 
-        except Exception as comp_e:
-            print(f"錯誤: 處理位置 {i} 字元 '{target_char}' vs '{guess_char}' 的比較邏輯時發生錯誤: {comp_e}");
-            traceback.print_exc();
-            response_data['messages'].append({'type': 'error', 'text': f"位置 {i+1} 字元比較失敗: {comp_e}"});
-            response_data['status'] = 'warning';
-            any_plot_failed = True;
-
-
+        # Plotting logic for the current character
         try:
              image_relative_path = plot_character_colored_by_history(
                  target_char,
-                 char_history,
+                 char_history, # char_history now contains updated (or old) best guesses
                  response_data['thresholds'],
                  i,
-                 PLOTS_OUTPUT_DIR
-             );
+                 PLOTS_OUTPUT_DIR # Ensure PLOTS_OUTPUT_DIR is defined
+             )
 
              if image_relative_path:
-                 response_data['image_urls'][i] = url_for('static', filename=image_relative_path);
-                 response_data['image_errors'][i] = False;
-                 plot_successful = True;
+                 # Make sure url_for and static endpoint are correctly configured
+                 response_data['image_urls'][i] = url_for('static', filename=image_relative_path)
+                 response_data['image_errors'][i] = False
+                 # plot_successful = True # This was in original, seems unused here
              else:
-                 response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成失敗."});
-                 partial_failure = True;
-                 any_plot_failed = True;
-
+                 response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成失敗."})
+                 partial_failure = True
+                 any_plot_failed = True
         except Exception as plot_e:
-            print(f"錯誤: 繪製位置 {i} 的圖片時發生錯誤: {plot_e}");
-            traceback.print_exc();
-            response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成時發生意外錯誤: {plot_e}"});
-            partial_failure = True;
-            any_plot_failed = True;
+            print(f"錯誤: 繪製位置 {i} 的圖片時發生錯誤: {plot_e}")
+            traceback.print_exc()
+            response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成時發生意外錯誤: {plot_e}"})
+            partial_failure = True
+            any_plot_failed = True
+        # End of loop for each character
 
     if any_plot_failed:
-         if response_data['status'] == 'success':
-              response_data['status'] = 'warning';
-         if partial_failure and not any(m['type'] in ['error', 'warning'] for m in response_data['messages']):
-              response_data['messages'].insert(0, {'type': 'warning', 'text': "部分字元的圖片生成失敗或有警告."});
+         if response_data['status'] == 'success': # Only downgrade if it was initially success
+              response_data['status'] = 'warning'
+         # Add a general message if not already present and status became warning
+         if partial_failure and response_data['status'] == 'warning' and \
+            not any(m['type'] == 'warning' and "部分字元" in m['text'] for m in response_data['messages']) and \
+            not any(m['type'] == 'error' for m in response_data['messages']):
+              response_data['messages'].insert(0, {'type': 'warning', 'text': "部分字元的圖片生成失敗或有警告."})
 
-    response_data['is_correct_guess'] = (guess_line == target_line);
+
+    response_data['is_correct_guess'] = (guess_line == target_line)
 
     if response_data['is_correct_guess']:
-        response_data['messages'].insert(0, {'type': 'success', 'text': "恭喜你，猜對了整句詩!"});
-        response_data['poem_info'] = current_poem_info_map.get(target_line);
-        response_data['status'] = 'success';
+        response_data['messages'].insert(0, {'type': 'success', 'text': "恭喜你，猜對了整句詩!"})
+        response_data['poem_info'] = current_poem_info_map.get(target_line)
+        # response_data['status'] = 'success' # Already success unless downgraded by errors
 
         if 'guess_count_history' not in game_state:
             game_state['guess_count_history'] = []
         game_state['guess_count_history'].append(game_state['guess_count'])
-        game_state['guess_count'] = 0
+        game_state['guess_count'] = 0 # Reset for the next poem
 
+    session['poem_game_state'] = game_state
+    session.modified = True
 
-    session['poem_game_state'] = game_state;
-    session.modified = True;
-
-    return jsonify(response_data);
-
+    return jsonify(response_data)
 
 @app.route('/new_poem', methods=['GET'])
 def new_poem():
