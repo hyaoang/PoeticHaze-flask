@@ -1,5 +1,6 @@
 Flask
 matplotlib
 numpy
-dtw-python==1.5.3
+fastdtw
+scipy
 gunicorn
