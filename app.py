@@ -831,7 +831,7 @@ def compare_poem_line():
 
                         try:
                             euclidean_dist_func = lambda a, b: np.linalg.norm(np.array(a) - np.array(b), ord=2)
-                            alignment = dtw.dtw(seg_g, seg_t, dist=euclidean_dist_func)
+                            alignment = dtw.dtw(seg_g, seg_t)
 
                             if hasattr(alignment, 'distance'):
                                 segment_dtw_matrix[seg_g_idx, seg_t_idx] = alignment.distance
