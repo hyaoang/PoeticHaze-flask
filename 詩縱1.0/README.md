@@ -7,7 +7,7 @@
 
 # github codespace
 打開一個新的codespace，應該會直接執行`pip install -r requirements.txt`，如果沒有，自己執行
-點開[app.py](詩綜1.0/app.py)就可以玩了
+點開[app.py](詩縱1.0/app.py)就可以玩了
 [按鈕長這樣](https://github.com/user-attachments/assets/044b489b-bd96-46bf-856a-5b85f3b3b705)
 就這個按下去。
 
