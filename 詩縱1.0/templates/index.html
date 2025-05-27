@@ -2,8 +2,11 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>詩縱</title>
+    <title>詩蹤</title>
     <style>
+        .hidden-element {
+        display: none;
+        }
         @font-face {
             font-family: 'NotoSansTC';
             src: url('NotoSansTC-Regular.ttf') format('truetype');
@@ -133,7 +136,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>猜詩句遊戲</h1>
+        <h1>詩蹤</h1>
 
         {% if game_error %}
             <p class="message error">{{ game_error }}</p>
@@ -158,7 +161,9 @@
                  });
              </script>
         {% else %}
-            <p id="game-intro">猜測一句五言詩句。輸入你的猜測後，會顯示詩句中每個字元的著色筆畫圖。筆畫的顏色反映了它與你最新和歷史最佳猜測字筆畫的相似度，正確的筆劃會顯示黑色，筆畫相似的將會標註為灰色，其顏色深淺依其相似程度而定。底下如果你猜得字顯示綠色代表猜中了，黃色代表猜的這個字確實在本句中，但不是你現在猜的位置。類似於Wordle的玩法，但不限定猜的內容要有意義</p>
+            <p id="game-intro" style="text-align: left;">猜測一句五言詩句。輸入你的猜測後，會顯示詩句中每個字元的著色筆畫圖。筆畫的顏色反映了它與你最新和歷史最佳猜測字筆畫的相似度，正確的筆劃會顯示黑色，筆畫相似的將會標註為灰色，其顏色深淺依其相似程度而定。底下如果你猜得字顯示綠色代表猜中了，黃色代表猜的這個字確實在本句中，但不是你現在猜的位置。類似於Wordle的玩法，但不限定猜的內容要有意義
+
+            </p>
 
             <div id="poem-source-selection">
                  <label for="poem_source">選擇題目範圍:</label>
@@ -174,7 +179,7 @@
 
             <form id="guess-form">
                 <div class="form-group">
-                    <label for="guess_line">你的猜測 (五個漢字):</label>
+                    <label for="guess_line">你的猜測 (五個字):</label>
                     <input type="text" id="guess_line" name="guess_line" maxlength="5" required value="">
                 </div>
                  <button type="submit" id="compare-button">比較猜測詩句</button>
@@ -211,7 +216,7 @@
             </div>
 
             <div class="thresholds-section">
-                 <h2>著色閾值設定 (難度，下拉選單可以調整，或直接輸入數值)</h2>
+                 <h2>難度設定</h2>
                 <div class="thresholds-group">
                      <div class="form-group">
                          <label for="difficulty">難易度:</label>
@@ -224,20 +229,14 @@
                             <option value="novice">菜雞 </option>
                          </select>
                      </div>
-                    <div class="form-group">
-                        <label for="thresh1">閾值 1 (黑以下):</label>
-                        <input type="number" id="thresh1" name="thresh1" value="{{ defaults.thresh1 | default(10000) }}" step="1" min="0" required readonly>
-                    </div>
-                    <div class="form-group">
-                        <label for="thresh2">閾值 2 (隱藏以上):</label>
-                        <input type="number" id="thresh2" name="thresh2" value="{{ defaults.thresh2 | default(25000) }}" step="1" min="0" required readonly>
-                    </div>
-                </div>
-                 <div class="color-key">
-                    <div class="color-key-item"><div class="color-sample black"></div> < <span id="thresh-black"></span> 純黑</div>
-                    <div class="color-key-item"><div class="color-sample gray10"></div> <span id="thresh-grad-start-lower"></span> ~ <span id="thresh-grad-start-upper"></span> 漸變 (灰)</div>
-                    <div class="color-key-item"><div class="color-sample hidden"></div> ≥ <span id="thresh-hidden"></span> 或無匹配 隱藏</div>
-                </div>
+                        <div class="form-group" style="display: none;"> {# Added style="display: none;" #}
+                            <label for="thresh1">閾值 1 (黑以下):</label>
+                            <input type="number" id="thresh1" name="thresh1" value="{{ defaults.thresh1 | default(10000) }}" step="1" min="0" required readonly>
+                        </div>
+                        <div class="form-group" style="display: none;"> {# Added style="display: none;" #}
+                            <label for="thresh2">閾值 2 (隱藏以上):</label>
+                            <input type="number" id="thresh2" name="thresh2" value="{{ defaults.thresh2 | default(25000) }}" step="1" min="0" required readonly>
+                        </div>
             </div>
 
             <div id="stats-section" class="stats-section" style="display: none;">

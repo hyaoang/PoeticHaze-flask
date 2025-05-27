@@ -362,8 +362,8 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
     threshold1 = thresholds.get('thresh1', 10000)
     threshold2 = thresholds.get('thresh2', 25000)
     color_pure_black = 0.0 # Black
-    color_light_gray = 0.9 # Lightest gray for gradient start
-    color_dark_gray = 0.3 # Darker gray for gradient end (adjust range as needed)
+    color_fixed_gray = 0.5 # Fixed gray for the middle range (adjust value as needed)
+
 
     if len(target_stroke_histories) != len(target_stroke_paths):
         print(f"Warning: Adjusting char_history stroke_histories length for char '{target_char}' at pos {position_index}. Expected {len(target_stroke_paths)}, got {len(target_stroke_histories)}. Re-initializing.")
@@ -376,61 +376,67 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
         historical_guess_char = hist_info.get('best_guess_char')
         historical_guess_stroke_index = hist_info.get('best_guess_stroke_index')
 
-        display_stroke = (not np.isinf(historical_min_dist) and historical_min_dist < threshold2)
+        
+        plot_path_str = None
+        color_to_use = None
+        historical_guess_centroid = None
+        target_stroke_path_str = ALL_CHARACTERS_DATA.get(target_char, [])[target_stroke_index]
+        target_centroid = calculate_stroke_centroid(target_stroke_path_str)
 
-        if display_stroke:
-            plot_path_str = None
-            historical_guess_centroid = None
-            target_stroke_path_str = ALL_CHARACTERS_DATA.get(target_char, [])[target_stroke_index]
-            target_centroid = calculate_stroke_centroid(target_stroke_path_str)
+
+        # --- MODIFIED LOGIC: Determine which path to plot and which color to use ---
+
+        if historical_min_dist < threshold1:
+            # Very close match -> Plot the historical guess shape (if valid) in Black
+             if historical_guess_char is not None and historical_guess_char in ALL_CHARACTERS_DATA:
+                  historical_guess_stroke_paths = ALL_CHARACTERS_DATA[historical_guess_char]
+                  if historical_guess_stroke_paths and historical_guess_stroke_index is not None and historical_guess_stroke_index < len(historical_guess_stroke_paths):
+                      plot_path_str = historical_guess_stroke_paths[historical_guess_stroke_index]
+                      historical_guess_centroid = calculate_stroke_centroid(plot_path_str)
+                      color_to_use = str(color_pure_black) # Use black color
+
+        elif historical_min_dist >= threshold1 and historical_min_dist < threshold2:
+             # Moderate match -> Plot the historical guess shape (if valid) in Fixed Gray
+             if historical_guess_char is not None and historical_guess_char in ALL_CHARACTERS_DATA:
+                  historical_guess_stroke_paths = ALL_CHARACTERS_DATA[historical_guess_char]
+                  if historical_guess_stroke_paths and historical_guess_stroke_index is not None and historical_guess_stroke_index < len(historical_guess_stroke_paths):
+                      plot_path_str = historical_guess_stroke_paths[historical_guess_stroke_index]
+                      historical_guess_centroid = calculate_stroke_centroid(plot_path_str)
+                      color_to_use = str(color_fixed_gray) # Use fixed gray color
+
+        # Else (historical_min_dist >= threshold2): plot_path_str remains None, nothing will be plotted for this stroke
+
+        # --- END MODIFIED LOGIC ---
 
 
-            if historical_guess_char is not None and historical_guess_char in ALL_CHARACTERS_DATA:
-                 historical_guess_stroke_paths = ALL_CHARACTERS_DATA[historical_guess_char]
-                 if historical_guess_stroke_paths and historical_guess_stroke_index is not None and historical_guess_stroke_index < len(historical_guess_stroke_paths):
-                    plot_path_str = historical_guess_stroke_paths[historical_guess_stroke_index]
-                    historical_guess_centroid = calculate_stroke_centroid(plot_path_str)
-
-            if plot_path_str:
-                color_val = None
-                if historical_min_dist < threshold1:
-                     color_val = color_pure_black
-                elif historical_min_dist >= threshold1 and historical_min_dist < threshold2:
-                    dist_range = threshold2 - threshold1
-                    if dist_range > 0:
-                        normalized_dist = (historical_min_dist - threshold1) / dist_range
-                        color_val = color_dark_gray + (color_light_gray - color_dark_gray) * normalized_dist
-                    else:
-                        color_val = (color_light_gray + color_dark_gray) / 2
+        if plot_path_str is not None and color_to_use is not None:
+             try:
+                translation = np.array([0.0, 0.0])
+                if target_centroid is not None and historical_guess_centroid is not None:
+                    translation = target_centroid - historical_guess_centroid
                 else:
-                    continue
-
-                color_stroke = str(color_val)
-
-                try:
                     translation = np.array([0.0, 0.0])
-                    if target_centroid is not None and historical_guess_centroid is not None:
-                        translation = target_centroid - historical_guess_centroid
-                    else:
-                        translation = np.array([0.0, 0.0])
-                        print(f"Warning: 無法計算位置 {position_index} 目標筆畫 {target_stroke_index+1} 或歷史猜測筆畫的質心.")
+                    print(f"Warning: 無法計算位置 {position_index} 目標筆畫 {target_stroke_index+1} 或歷史猜測筆畫的質心.")
 
-                    outline_points = get_path_outline_points(plot_path_str, num_curve_points=30)
+                outline_points = get_path_outline_points(plot_path_str, num_curve_points=30)
 
-                    if outline_points.shape[0] > 0:
-                         translated_outline = outline_points + translation
+                if outline_points.shape[0] > 0:
+                     translated_outline = outline_points + translation
 
-                         ax.fill(translated_outline[:, 0], translated_outline[:, 1], color=color_stroke, zorder=2)
-                         # Draw a thin outline with the SAME color as the fill for a consistent look
-                         ax.plot(translated_outline[:, 0], translated_outline[:, 1], color=color_stroke, linewidth=0.5, zorder=3, solid_capstyle='round', solid_joinstyle='round')
+                     ax.fill(translated_outline[:, 0], translated_outline[:, 1], color=color_to_use, zorder=2)
+                     # Draw a thin outline with the SAME color as the fill
+                     ax.plot(translated_outline[:, 0], translated_outline[:, 1], color=color_to_use, linewidth=0.5, zorder=3, solid_capstyle='round', solid_joinstyle='round')
 
-
-                except Exception as e:
-                     print(f"警告: 解析、處理或繪製位置 {position_index} 目標筆畫 {target_stroke_index+1} 的歷史猜測筆畫時發生錯誤: {e}")
-                     traceback.print_exc()
-                     pass
-            else:
+             except Exception as e:
+                 print(f"警告: 解析、處理或繪製位置 {position_index} 目標筆畫 {target_stroke_index+1} 的歷史猜測筆畫時發生錯誤: {e}")
+                 traceback.print_exc()
                  pass
+        else:
+             # This case happens if historical_min_dist < threshold2 but no valid historical guess path was found (plot_path_str is None)
+             if not np.isinf(historical_min_dist) and historical_min_dist < threshold2:
+                  print(f"Warning: 位置 {position_index} 目標筆畫 {target_stroke_index+1} 歷史記錄 ('{historical_guess_char}' idx {historical_guess_stroke_index}) 無效，無法繪製形狀，即使距離 < threshold2 ({historical_min_dist}).")
+             pass # Do not plot this stroke
+
 
     filename = f"plot_{position_index}_{ord(target_char):04X}_colored_{int(time.time())}_{random.randint(0, 9999)}.png"
     image_relative_path_on_disk = os.path.join(output_dir_relative, filename)
@@ -447,7 +453,6 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
         return None
     finally:
         plt.close(fig)
-
 
 def initialize_game_session():
     global VALID_POEM_LINES_MAP, POEM_INFO_MAP_MAP, ALL_CHARACTERS_DATA
@@ -572,6 +577,7 @@ def generate_stats_plot_buffer(guess_counts):
         guess_numbers = [item[0] for item in sorted_counts]
         frequencies = [item[1] for item in sorted_counts]
         bars = ax.bar(guess_numbers, frequencies, color='#007bff')
+        max_frequency = max(frequencies) if frequencies else 0
         ax.set_xlabel("Guesses")
         ax.set_ylabel("times")
         ax.set_title("Total Guesses Graph")
@@ -580,6 +586,8 @@ def generate_stats_plot_buffer(guess_counts):
         for bar in bars:
             yval = bar.get_height()
             plt.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom')
+        y_upper_limit = max_frequency + 0.1 + 0.5 # max_frequency + text_offset + small_margin
+        ax.set_ylim(0, y_upper_limit)
     buf = io.BytesIO()
     plt.tight_layout()
     fig.savefig(buf, format='png')
