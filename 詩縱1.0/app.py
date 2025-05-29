@@ -329,6 +329,63 @@ def get_path_outline_points(path_string, num_curve_points=30):
              all_points = np.array(all_points_list)
     return all_points
 
+def plot_solid_black_character(target_char, char_data, position_index, output_dir_relative):
+    if target_char not in char_data:
+        print(f"繪圖錯誤: 目標字元 '{target_char}' 不在筆畫資料中，無法繪製黑色圖片.")
+        return None
+    target_stroke_paths = char_data[target_char]
+    if not target_stroke_paths:
+         print(f"繪圖錯誤: 目標字元 '{target_char}' 沒有筆畫資料，無法繪製黑色圖片.")
+         return None
+
+    full_output_dir = os.path.join(app.static_folder, output_dir_relative)
+    if not os.path.exists(full_output_dir):
+        try:
+            os.makedirs(full_output_dir)
+        except OSError as e:
+            print(f"錯誤: 無法建立輸出目錄 '{full_output_dir}': {e}. 無法儲存圖片.")
+            return None
+
+    fig, ax = plt.subplots(figsize=(1.5, 1.5), dpi=100)
+    ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
+    ax.invert_yaxis()
+    ax.set_aspect('equal', adjustable='box')
+
+    padding = 100
+    ax.set_xlim(0 - padding, 1024 + padding)
+    ax.set_ylim(0 - padding, 1024 + padding)
+
+    color_pure_black = 0.0
+
+    for path_str in target_stroke_paths:
+         try:
+             outline_points = get_path_outline_points(path_str, num_curve_points=30)
+             if outline_points.shape[0] > 0:
+                  ax.fill(outline_points[:, 0], outline_points[:, 1], color=str(color_pure_black), zorder=2)
+                  ax.plot(outline_points[:, 0], outline_points[:, 1], color=str(color_pure_black), linewidth=0.5, zorder=3, solid_capstyle='round', solid_joinstyle='round')
+         except Exception as e:
+              print(f"Warning: 解析或繪製字元 '{target_char}' 的筆畫時發生錯誤 (用於繪製黑色圖): {e}")
+              traceback.print_exc()
+              pass
+
+
+    filename = f"plot_{position_index}_{ord(target_char):04X}_black_{int(time.time())}_{random.randint(0, 9999)}.png"
+    image_relative_path_on_disk = os.path.join(output_dir_relative, filename)
+    image_full_path = os.path.join(app.static_folder, image_relative_path_on_disk)
+    image_relative_path_for_url = f"{output_dir_relative}/{filename}"
+
+    try:
+        plt.tight_layout(pad=0)
+        fig.savefig(image_full_path, dpi=200, bbox_inches='tight', pad_inches=0)
+        return image_relative_path_for_url
+    except Exception as e:
+        print(f"錯誤: 儲存位置 {position_index} 目標 '{target_char}' 的黑色圖片時發生錯誤: {e}")
+        traceback.print_exc()
+        return None
+    finally:
+        plt.close(fig)
+
 
 def plot_character_colored_by_history(target_char, char_history, thresholds, position_index, output_dir_relative):
     if target_char not in ALL_CHARACTERS_DATA:
@@ -336,9 +393,16 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
         return None
     target_stroke_paths = ALL_CHARACTERS_DATA[target_char]
     target_stroke_histories = char_history.get('stroke_histories', [])
-    if not target_stroke_paths or len(target_stroke_paths) != len(target_stroke_histories):
-         print(f"繪圖錯誤: 目標字元 '{target_char}' ({position_index}) 的筆畫資料 ({len(target_stroke_paths)}) 或歷史記錄 ({len(target_stroke_histories)}) 不一致.")
+    if not target_stroke_paths:
+         print(f"繪圖錯誤: 目標字元 '{target_char}' 沒有筆畫資料.")
          return None
+
+    if len(target_stroke_paths) != len(target_stroke_histories):
+         print(f"繪圖錯誤: 目標字元 '{target_char}' ({position_index}) 的筆畫資料 ({len(target_stroke_paths)}) 或歷史記錄 ({len(target_stroke_histories)}) 不一致.")
+         # Attempt to re-initialize history length if mismatch, although comparison should have done this
+         char_history['stroke_histories'] = [{'min_dist': float('inf'), 'best_guess_char': None, 'best_guess_stroke_index': None} for _ in range(len(target_stroke_paths))]
+         target_stroke_histories = char_history['stroke_histories']
+
 
     full_output_dir = os.path.join(app.static_folder, output_dir_relative)
     if not os.path.exists(full_output_dir):
@@ -361,14 +425,8 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
 
     threshold1 = thresholds.get('thresh1', 10000)
     threshold2 = thresholds.get('thresh2', 25000)
-    color_pure_black = 0.0 # Black
-    color_fixed_gray = 0.5 # Fixed gray for the middle range (adjust value as needed)
-
-
-    if len(target_stroke_histories) != len(target_stroke_paths):
-        print(f"Warning: Adjusting char_history stroke_histories length for char '{target_char}' at pos {position_index}. Expected {len(target_stroke_paths)}, got {len(target_stroke_histories)}. Re-initializing.")
-        char_history['stroke_histories'] = [{'min_dist': float('inf'), 'best_guess_char': None, 'best_guess_stroke_index': None} for _ in range(len(target_stroke_paths))]
-        target_stroke_histories = char_history['stroke_histories']
+    color_pure_black = 0.0
+    color_fixed_gray = 0.5
 
 
     for target_stroke_index, hist_info in enumerate(target_stroke_histories):
@@ -376,37 +434,27 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
         historical_guess_char = hist_info.get('best_guess_char')
         historical_guess_stroke_index = hist_info.get('best_guess_stroke_index')
 
-        
         plot_path_str = None
         color_to_use = None
         historical_guess_centroid = None
         target_stroke_path_str = ALL_CHARACTERS_DATA.get(target_char, [])[target_stroke_index]
         target_centroid = calculate_stroke_centroid(target_stroke_path_str)
 
-
-        # --- MODIFIED LOGIC: Determine which path to plot and which color to use ---
-
         if historical_min_dist < threshold1:
-            # Very close match -> Plot the historical guess shape (if valid) in Black
              if historical_guess_char is not None and historical_guess_char in ALL_CHARACTERS_DATA:
                   historical_guess_stroke_paths = ALL_CHARACTERS_DATA[historical_guess_char]
                   if historical_guess_stroke_paths and historical_guess_stroke_index is not None and historical_guess_stroke_index < len(historical_guess_stroke_paths):
                       plot_path_str = historical_guess_stroke_paths[historical_guess_stroke_index]
                       historical_guess_centroid = calculate_stroke_centroid(plot_path_str)
-                      color_to_use = str(color_pure_black) # Use black color
+                      color_to_use = str(color_pure_black)
 
         elif historical_min_dist >= threshold1 and historical_min_dist < threshold2:
-             # Moderate match -> Plot the historical guess shape (if valid) in Fixed Gray
              if historical_guess_char is not None and historical_guess_char in ALL_CHARACTERS_DATA:
                   historical_guess_stroke_paths = ALL_CHARACTERS_DATA[historical_guess_char]
                   if historical_guess_stroke_paths and historical_guess_stroke_index is not None and historical_guess_stroke_index < len(historical_guess_stroke_paths):
                       plot_path_str = historical_guess_stroke_paths[historical_guess_stroke_index]
                       historical_guess_centroid = calculate_stroke_centroid(plot_path_str)
-                      color_to_use = str(color_fixed_gray) # Use fixed gray color
-
-        # Else (historical_min_dist >= threshold2): plot_path_str remains None, nothing will be plotted for this stroke
-
-        # --- END MODIFIED LOGIC ---
+                      color_to_use = str(color_fixed_gray)
 
 
         if plot_path_str is not None and color_to_use is not None:
@@ -424,18 +472,16 @@ def plot_character_colored_by_history(target_char, char_history, thresholds, pos
                      translated_outline = outline_points + translation
 
                      ax.fill(translated_outline[:, 0], translated_outline[:, 1], color=color_to_use, zorder=2)
-                     # Draw a thin outline with the SAME color as the fill
                      ax.plot(translated_outline[:, 0], translated_outline[:, 1], color=color_to_use, linewidth=0.5, zorder=3, solid_capstyle='round', solid_joinstyle='round')
 
              except Exception as e:
-                 print(f"警告: 解析、處理或繪製位置 {position_index} 目標筆畫 {target_stroke_index+1} 的歷史猜測筆畫時發生錯誤: {e}")
+                 print(f"Warning: 解析、處理或繪製位置 {position_index} 目標筆畫 {target_stroke_index+1} 的歷史猜測筆畫時發生錯誤: {e}")
                  traceback.print_exc()
                  pass
         else:
-             # This case happens if historical_min_dist < threshold2 but no valid historical guess path was found (plot_path_str is None)
              if not np.isinf(historical_min_dist) and historical_min_dist < threshold2:
                   print(f"Warning: 位置 {position_index} 目標筆畫 {target_stroke_index+1} 歷史記錄 ('{historical_guess_char}' idx {historical_guess_stroke_index}) 無效，無法繪製形狀，即使距離 < threshold2 ({historical_min_dist}).")
-             pass # Do not plot this stroke
+             pass
 
 
     filename = f"plot_{position_index}_{ord(target_char):04X}_colored_{int(time.time())}_{random.randint(0, 9999)}.png"
@@ -586,7 +632,7 @@ def generate_stats_plot_buffer(guess_counts):
         for bar in bars:
             yval = bar.get_height()
             plt.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom')
-        y_upper_limit = max_frequency + 0.1 + 0.5 # max_frequency + text_offset + small_margin
+        y_upper_limit = max_frequency + 0.1 + 0.5
         ax.set_ylim(0, y_upper_limit)
     buf = io.BytesIO()
     plt.tight_layout()
@@ -735,14 +781,6 @@ def compare_poem_line():
     num_curve_points_for_dtw = 7
 
     guess_char_stroke_sequences_map = {}
-    for char in set(guess_line):
-         try:
-             guess_char_stroke_sequences_map[char] = get_stroke_point_sequences_with_original_index(char, ALL_CHARACTERS_DATA, num_curve_points=num_curve_points_for_dtw)
-         except Exception as e:
-             print(f"Error processing guess character '{char}' strokes for DTW: {e}")
-             response_data['messages'].append({'type': 'error', 'text': f"處理猜測字 '{char}'筆畫時發生錯誤: {e}"})
-             response_data['status'] = 'error'
-             any_plot_failed = True
 
 
     for i in range(5):
@@ -750,13 +788,50 @@ def compare_poem_line():
         guess_char = guess_line[i]
         char_history = char_histories[i]
 
+        if guess_char == target_char:
+            print(f"位置 {i+1}: 字元 '{target_char}' 猜對了，繪製黑色圖.")
+            try:
+                image_relative_path_for_url = plot_solid_black_character(
+                    target_char,
+                    ALL_CHARACTERS_DATA,
+                    i,
+                    PLOTS_OUTPUT_DIR_RELATIVE
+                )
+                if image_relative_path_for_url:
+                    response_data['image_urls'][i] = url_for('static', filename=image_relative_path_for_url)
+                    response_data['image_errors'][i] = False
+                    #response_data['messages'].append({'type': 'info', 'text': f"位置 {i+1}: '{target_char}' 字元正確!"})
+                else:
+                    response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 正確字元的黑色圖片生成失敗."})
+                    partial_failure = True
+                    any_plot_failed = True
+            except Exception as plot_e:
+                 print(f"錯誤: 繪製位置 {i} 正確字元 '{target_char}' 的黑色圖片時發生錯誤: {plot_e}")
+                 traceback.print_exc()
+                 response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 黑色圖片生成時發生意外錯誤: {plot_e}"})
+                 partial_failure = True
+                 any_plot_failed = True
+            continue
+
+
+        print(f"位置 {i+1}: 字元 '{target_char}' vs 猜測 '{guess_char}', 進行筆畫比較.")
+
         try:
             target_stroke_sequences_with_original_index = get_stroke_point_sequences_with_original_index(target_char, ALL_CHARACTERS_DATA, num_curve_points=num_curve_points_for_dtw)
+
+            if guess_char not in guess_char_stroke_sequences_map:
+                 try:
+                     guess_char_stroke_sequences_map[guess_char] = get_stroke_point_sequences_with_original_index(guess_char, ALL_CHARACTERS_DATA, num_curve_points=num_curve_points_for_dtw)
+                 except Exception as e:
+                     print(f"Error processing guess character '{guess_char}' strokes for DTW: {e}")
+                     response_data['messages'].append({'type': 'error', 'text': f"處理猜測字 '{guess_char}'筆畫時發生錯誤: {e}"})
+                     any_plot_failed = True
+
+
             guess_stroke_sequences_with_original_index = guess_char_stroke_sequences_map.get(guess_char, [])
 
-            num_target_original_strokes = len(ALL_CHARACTERS_DATA.get(target_char, []))
-            num_guess_original_strokes = len(ALL_CHARACTERS_DATA.get(guess_char, []))
 
+            num_target_original_strokes = len(ALL_CHARACTERS_DATA.get(target_char, []))
             if len(char_history.get('stroke_histories', [])) != num_target_original_strokes:
                  print(f"Warning: Adjusting char_history stroke_histories length for char '{target_char}' at pos {i}. Expected {num_target_original_strokes}, got {len(char_history.get('stroke_histories', []))}. Re-initializing.")
                  char_history['stroke_histories'] = [{'min_dist': float('inf'), 'best_guess_char': None, 'best_guess_stroke_index': None} for _ in range(num_target_original_strokes)]
@@ -767,50 +842,50 @@ def compare_poem_line():
                 response_data['messages'].append({'type': 'warning', 'text': msg})
                 partial_failure = True
                 any_plot_failed = True
-                continue
 
-            stroke_dtw_matrix = np.full((len(guess_stroke_sequences_with_original_index), len(target_stroke_sequences_with_original_index)), np.inf)
+            else:
+                stroke_dtw_matrix = np.full((len(guess_stroke_sequences_with_original_index), len(target_stroke_sequences_with_original_index)), np.inf)
 
-            for seq_g_idx, (seq_g, original_g_idx) in enumerate(guess_stroke_sequences_with_original_index):
-                for seq_t_idx, (seq_t, original_t_idx) in enumerate(target_stroke_sequences_with_original_index):
-                     if not isinstance(seq_g, np.ndarray) or seq_g.shape[0] < 2 or \
-                        not isinstance(seq_t, np.ndarray) or seq_t.shape[0] < 2:
-                         print(f"Warning: 無效或過短的筆劃序列用於 FastDTW 於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}). 跳過.")
-                         stroke_dtw_matrix[seq_g_idx, seq_t_idx] = float('inf')
-                         continue
-                     try:
-                         dtw_distance, path = fastdtw(seq_g, seq_t, dist=euclidean)
-                         stroke_dtw_matrix[seq_g_idx, seq_t_idx] = dtw_distance
-                     except Exception as dtw_e:
-                         print(f"Warning: FastDTW 計算失敗於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}): {dtw_e}")
-                         traceback.print_exc()
-                         stroke_dtw_matrix[seq_g_idx, seq_t_idx] = float('inf')
+                for seq_g_idx, (seq_g, original_g_idx) in enumerate(guess_stroke_sequences_with_original_index):
+                    for seq_t_idx, (seq_t, original_t_idx) in enumerate(target_stroke_sequences_with_original_index):
+                         if not isinstance(seq_g, np.ndarray) or seq_g.shape[0] < 2 or \
+                            not isinstance(seq_t, np.ndarray) or seq_t.shape[0] < 2:
+                             print(f"Warning: 無效或過短的筆劃序列用於 FastDTW 於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}). 跳過.")
+                             stroke_dtw_matrix[seq_g_idx, seq_t_idx] = float('inf')
+                             continue
+                         try:
+                             dtw_distance, path = fastdtw(seq_g, seq_t, dist=euclidean)
+                             stroke_dtw_matrix[seq_g_idx, seq_t_idx] = dtw_distance
+                         except Exception as dtw_e:
+                             print(f"Warning: FastDTW 計算失敗於位置 {i} (猜測 '{guess_char}' 筆畫 {original_g_idx+1} vs 目標 '{target_char}' 筆畫 {original_t_idx+1}): {dtw_e}")
+                             traceback.print_exc()
+                             stroke_dtw_matrix[seq_g_idx, seq_t_idx] = float('inf')
 
-            for target_original_index in range(num_target_original_strokes):
-                 target_comp_index = next((idx for idx, (seq, orig_idx) in enumerate(target_stroke_sequences_with_original_index) if orig_idx == target_original_index), None)
+                for target_original_index in range(num_target_original_strokes):
+                     target_comp_index = next((idx for idx, (seq, orig_idx) in enumerate(target_stroke_sequences_with_original_index) if orig_idx == target_original_index), None)
 
-                 min_dist_for_this_target_stroke = float('inf')
-                 best_matching_guess_original_index_for_this_target_stroke = None
+                     min_dist_for_this_target_stroke = float('inf')
+                     best_matching_guess_original_index_for_this_target_stroke = None
 
-                 if target_comp_index is not None and target_comp_index < stroke_dtw_matrix.shape[1]:
-                      col_distances = stroke_dtw_matrix[:, target_comp_index]
+                     if target_comp_index is not None and target_comp_index < stroke_dtw_matrix.shape[1]:
+                          col_distances = stroke_dtw_matrix[:, target_comp_index]
 
-                      if col_distances.size > 0 and np.min(col_distances) != np.inf:
-                          min_dist_in_col = np.min(col_distances)
-                          min_dist_for_this_target_stroke = min_dist_in_col
+                          if col_distances.size > 0 and np.min(col_distances) != np.inf:
+                              min_dist_in_col = np.min(col_distances)
+                              min_dist_for_this_target_stroke = min_dist_in_col
 
-                          min_row_comp_index = np.argmin(col_distances)
+                              min_row_comp_index = np.argmin(col_distances)
 
-                          if min_row_comp_index < len(guess_stroke_sequences_with_original_index):
-                             best_matching_guess_original_index_for_this_target_stroke = guess_stroke_sequences_with_original_index[min_row_comp_index][1]
+                              if min_row_comp_index < len(guess_stroke_sequences_with_original_index):
+                                 best_matching_guess_original_index_for_this_target_stroke = guess_stroke_sequences_with_original_index[min_row_comp_index][1]
 
 
-                 if target_original_index < len(char_history.get('stroke_histories', [])):
-                      hist_stroke_info = char_history['stroke_histories'][target_original_index]
-                      if min_dist_for_this_target_stroke < hist_stroke_info.get('min_dist', float('inf')):
-                          hist_stroke_info['min_dist'] = min_dist_for_this_target_stroke
-                          hist_stroke_info['best_guess_char'] = guess_char
-                          hist_stroke_info['best_guess_stroke_index'] = best_matching_guess_original_index_for_this_target_stroke
+                     if target_original_index < len(char_history.get('stroke_histories', [])):
+                          hist_stroke_info = char_history['stroke_histories'][target_original_index]
+                          if min_dist_for_this_target_stroke < hist_stroke_info.get('min_dist', float('inf')):
+                              hist_stroke_info['min_dist'] = min_dist_for_this_target_stroke
+                              hist_stroke_info['best_guess_char'] = guess_char
+                              hist_stroke_info['best_guess_stroke_index'] = best_matching_guess_original_index_for_this_target_stroke
 
         except Exception as comp_e:
             print(f"錯誤: 處理位置 {i} 字元 '{target_char}' vs '{guess_char}' 的比較邏輯時發生錯誤: {comp_e}")
@@ -828,35 +903,36 @@ def compare_poem_line():
                  PLOTS_OUTPUT_DIR_RELATIVE
              )
              if image_relative_path_for_url:
-                 if target_char in ALL_CHARACTERS_DATA:
+                 if response_data['image_urls'][i] is None:
                      response_data['image_urls'][i] = url_for('static', filename=image_relative_path_for_url)
                      response_data['image_errors'][i] = False
-                 else:
-                     response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 無法載入目標字元筆畫資料，圖片生成失敗."})
-                     partial_failure = True
-                     any_plot_failed = True
              else:
-                 response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成失敗."})
-                 partial_failure = True
-                 any_plot_failed = True
+                 if response_data['image_urls'][i] is None:
+                      response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成失敗."})
+                      partial_failure = True
+                      any_plot_failed = True
         except Exception as plot_e:
             print(f"錯誤: 繪製位置 {i} 的圖片時發生錯誤: {plot_e}")
             traceback.print_exc()
-            response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成時發生意外錯誤: {plot_e}"})
-            partial_failure = True
-            any_plot_failed = True
+            if response_data['image_urls'][i] is None:
+                response_data['messages'].append({'type': 'warning', 'text': f"位置 {i+1} ({target_char}): 圖片生成時發生意外錯誤: {plot_e}"})
+                partial_failure = True
+                any_plot_failed = True
 
     if any_plot_failed:
          if response_data['status'] == 'success':
               response_data['status'] = 'warning'
          if partial_failure and not any(m['type'] in ['error', 'warning'] for m in response_data['messages']):
-              response_data['messages'].insert(0, {'type': 'warning', 'text': "部分字元的圖片生成失敗或有警告."})
+              pass
+    elif partial_failure:
+        if response_data['status'] == 'success':
+             response_data['status'] = 'warning'
+
 
     response_data['is_correct_guess'] = (guess_line == target_line)
     if response_data['is_correct_guess']:
         response_data['messages'].insert(0, {'type': 'success', 'text': "恭喜你，猜對了整句詩!"})
         response_data['poem_info'] = current_poem_info_map.get(target_line)
-        response_data['status'] = 'success'
         if 'guess_count_history' not in game_state:
             game_state['guess_count_history'] = []
         game_state['guess_count_history'].append(game_state['guess_count'])
